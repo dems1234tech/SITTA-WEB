@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Informasi Stok Bahan Ajar</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <nav class="navbar">
+      <div class="nav-brand">
+        <img src="https://1.bp.blogspot.com/-1clLdnqn9Ac/UMvqQKhf_rI/AAAAAAAAA4M/g4ABaiqOYeM/s1600/Logo+UT-Universitas-Terbuka.png" alt="Logo UT" />
+        <span>SITTA UT</span>
+      </div>
+      <ul>
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="stok.html">Informasi Bahan Ajar</a></li>
+        <li><a href="tracking.html">Tracking Pengiriman</a></li>
+        <li class="dropdown">
+          <a href="#">Laporan ▾</a>
+          <ul class="dropdown-content">
+            <li><a href="#">Monitoring Progress DO</a></li>
+            <li><a href="#">Rekap Bahan Ajar</a></li>
+          </ul>
+        </li>
+        <li><a href="index.html" style="color: var(--danger);">Logout</a></li>
+      </ul>
+    </nav>
+
+    <div class="stok-container">
+      <div class="stok-header" style="margin-bottom: 30px;">
+        <input type="text" id="searchInput" class="search-bar" placeholder="Pencarian kata kunci (judul / kode / lokasi)..." style="width: 100%; padding: 15px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: white; font-size: 1.1em; outline: none; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: 0.3s;" onfocus="this.style.boxShadow='0 0 15px var(--primary)'" onblur="this.style.boxShadow='0 4px 10px rgba(0,0,0,0.5)'" />
+      </div>
+      
+      <div class="stok-grid" id="stokGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px;">
+        <!-- Cards rendered here by JS -->
+      </div>
+      <h3>Tambah Stok Baru</h3>
+      <form id="addForm">
+        <input type="text" id="lokasi" placeholder="Kode Lokasi" required />
+        <input type="text" id="kode" placeholder="Kode Barang" required />
+        <input type="text" id="nama" placeholder="Nama Barang" required />
+        <input type="text" id="jenis" placeholder="Jenis Barang" required />
+        <input type="number" id="edisi" placeholder="Edisi" required />
+        <input type="number" id="stok" placeholder="Stok" required />
+        <input type="text" id="cover" placeholder="Path Cover (Contoh: img/buku.jpg)" />
+        <button class="btn">Tambah</button>
+      </form>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/script.js"></script>
+  </body>
+</html>

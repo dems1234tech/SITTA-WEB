@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tracking Pengiriman SITTA</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <nav class="navbar">
+      <div class="nav-brand">
+        <img src="https://1.bp.blogspot.com/-1clLdnqn9Ac/UMvqQKhf_rI/AAAAAAAAA4M/g4ABaiqOYeM/s1600/Logo+UT-Universitas-Terbuka.png" alt="Logo UT" />
+        <span>SITTA UT</span>
+      </div>
+      <ul>
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="stok.html">Informasi Bahan Ajar</a></li>
+        <li><a href="tracking.html">Tracking Pengiriman</a></li>
+        <li class="dropdown">
+          <a href="#">Laporan ▾</a>
+          <ul class="dropdown-content">
+            <li><a href="#">Monitoring Progress DO</a></li>
+            <li><a href="#">Rekap Bahan Ajar</a></li>
+          </ul>
+        </li>
+        <li><a href="index.html" style="color: var(--danger);">Logout</a></li>
+      </ul>
+    </nav>
+
+    <div class="tracking-container">
+      <h2>Tracking Pengiriman Bahan Ajar</h2>
+      <input
+        type="text"
+        id="doNumber"
+        placeholder="Masukkan Nomor DO/Billing"
+      />
+      <button id="searchDO" class="btn">Cari</button>
+      <div id="trackingResult"></div>
+    </div>
+
+    <script src="js/script.js"></script>
+  </body>
+</html>
