@@ -203,8 +203,19 @@ if (searchDO) {
     result.innerHTML = `<p style="font-style: italic; color: #777;">Mengambil catatan pengiriman...</p>`;
     
     setTimeout(() => {
+      let data = null;
+      // Cek di dataTracking static
       if (typeof dataTracking !== "undefined" && dataTracking[input]) {
-        const data = dataTracking[input];
+        data = dataTracking[input];
+      } else {
+        // Cek di history tracking dinamis (localStorage/sessionStorage)
+        const dynTracking = JSON.parse(sessionStorage.getItem('dynamicTracking')) || {};
+        if(dynTracking[input]) {
+          data = dynTracking[input];
+        }
+      }
+
+      if (data) {
         let timelineHTML = '';
         data.perjalanan.forEach((step, index) => {
            const isActive = index === data.perjalanan.length - 1 ? 'active' : '';
@@ -462,14 +473,102 @@ if (stokGrid && typeof dataBahanAjar !== "undefined") {
     });
   }
 
+  // Setup Receipt Modal
+  const receiptModal = document.createElement("div");
+  receiptModal.id = "receiptModal";
+  receiptModal.className = "modal";
+  document.body.appendChild(receiptModal);
+
   // Global checkout function
   window.checkout = function() {
     if(cart.length === 0) return;
-    showToast("Checkout berhasil! Memproses pesanan...", "success");
+    
+    // Generate Resi / DO
+    const timestamp = new Date();
+    const resiStr = "DO-" + timestamp.getTime().toString().slice(-6);
+    
+    let grandTotal = 0;
+    let totalItems = 0;
+    let receiptItemsHTML = '';
+    
+    cart.forEach(c => {
+      const sub = c.harga * c.qty;
+      grandTotal += sub;
+      totalItems += c.qty;
+      receiptItemsHTML += `
+        <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px; color: #ccc;">
+          <span>${c.qty}x ${c.nama}</span>
+          <span>Rp ${sub.toLocaleString('id-ID')}</span>
+        </div>
+      `;
+    });
+    
+    const formattedTotal = "Rp " + grandTotal.toLocaleString('id-ID');
+    const dateStr = timestamp.toLocaleString('id-ID');
+    
+    // Generate Struk HTML
+    receiptModal.innerHTML = `
+      <div class="modal-content" style="max-width: 400px; background: #fff; color: #000; border-radius: 8px; font-family: monospace; padding: 30px;">
+        <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 15px; margin-bottom: 15px;">
+          <h2 style="margin: 0;">SITTA UT</h2>
+          <p style="margin: 5px 0 0;">Struk Pembelian Bahan Ajar</p>
+        </div>
+        <p style="margin: 5px 0;"><strong>No Resi / DO:</strong> ${resiStr}</p>
+        <p style="margin: 5px 0;"><strong>Tanggal:</strong> ${dateStr}</p>
+        <p style="margin: 5px 0;"><strong>Penerima:</strong> ${sessionStorage.getItem('userName') || 'Pelanggan'}</p>
+        <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; margin: 15px 0; padding: 15px 0;">
+          ${receiptItemsHTML}
+        </div>
+        <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.2em;">
+          <span>TOTAL</span>
+          <span>${formattedTotal}</span>
+        </div>
+        <div style="text-align: center; margin-top: 30px;">
+          <p style="font-size: 0.9em; margin-bottom: 20px;">Terima kasih atas pesanan Anda!</p>
+          <button class="btn" onclick="document.getElementById('receiptModal').classList.remove('show'); setTimeout(() => { document.getElementById('receiptModal').style.display='none'; }, 300);" style="background: #111; color: white;">Tutup Struk</button>
+        </div>
+      </div>
+    `;
+
+    // Save to History
+    let histori = JSON.parse(sessionStorage.getItem('historiTransaksi')) || [];
+    histori.unshift({
+      resi: resiStr,
+      tanggal: dateStr,
+      items: totalItems,
+      total: formattedTotal
+    });
+    sessionStorage.setItem('historiTransaksi', JSON.stringify(histori));
+
+    // Save dynamic tracking
+    let dynTracking = JSON.parse(sessionStorage.getItem('dynamicTracking')) || {};
+    dynTracking[resiStr] = {
+      nama: sessionStorage.getItem('userName') || 'Pelanggan',
+      nomorDO: resiStr,
+      ekspedisi: "SITTA Express",
+      tanggalKirim: dateStr,
+      paket: "Bahan Ajar",
+      total: formattedTotal,
+      status: "Diproses",
+      perjalanan: [
+        { waktu: dateStr, keterangan: "Pesanan dibuat dan pembayaran berhasil dikonfirmasi." },
+        { waktu: "Menunggu", keterangan: "Pesanan sedang disiapkan untuk pengiriman." }
+      ]
+    };
+    sessionStorage.setItem('dynamicTracking', JSON.stringify(dynTracking));
+
+    // Cleanup Cart
     cart = [];
     document.getElementById("cartCount").innerText = "0";
     renderCart();
-    setTimeout(() => { document.getElementById('closeCart').click(); }, 1500);
+    document.getElementById('closeCart').click();
+    
+    // Show Receipt
+    showToast("Checkout berhasil! Memproses pesanan...", "success");
+    setTimeout(() => {
+      receiptModal.style.display = "flex";
+      setTimeout(() => { receiptModal.classList.add("show"); }, 10);
+    }, 500);
   };
   // --- END KERANJANG LOGIC ---
 
@@ -480,6 +579,36 @@ if (stokGrid && typeof dataBahanAjar !== "undefined") {
   }
 
   renderGrid();
+
+// Render Histori Transaksi di Dashboard
+const historiGrid = document.getElementById("historiGrid");
+if (historiGrid) {
+  const histori = JSON.parse(sessionStorage.getItem('historiTransaksi')) || [];
+  if (histori.length === 0) {
+    historiGrid.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Belum ada histori transaksi.</p>`;
+  } else {
+    let html = '';
+    histori.forEach(h => {
+      html += `
+        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+          <div>
+            <h4 style="margin: 0 0 5px 0; color: var(--text-main);">No Resi: <span style="color: var(--primary);">${h.resi}</span></h4>
+            <p style="margin: 0 0 5px 0; color: var(--text-muted); font-size: 0.9em;">Tanggal: ${h.tanggal}</p>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.9em;">Jumlah Item: ${h.items} buku</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0 0 5px 0; color: var(--text-muted); font-size: 0.9em;">Total Pembayaran</p>
+            <h3 style="margin: 0; color: var(--secondary);">${h.total}</h3>
+          </div>
+          <div style="width: 100%; border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 5px;">
+            <a href="tracking.html" style="color: var(--primary); text-decoration: none; font-size: 0.9em; font-weight: bold;">Lacak Pengiriman &rarr;</a>
+          </div>
+        </div>
+      `;
+    });
+    historiGrid.innerHTML = html;
+  }
+}
 
   // Tambah stok baru
   const addForm = document.getElementById("addForm");
