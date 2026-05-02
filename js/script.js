@@ -295,8 +295,8 @@ if (stokGrid && typeof dataBahanAjar !== "undefined") {
           </div>
 
           <div style="display: flex; gap: 10px;">
-            <input type="number" value="1" min="1" max="${item.stok}" style="width: 60px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: white; text-align: center;">
-            <button class="btn" style="flex-grow: 1; padding: 8px; font-size: 0.9em; border-radius: 8px;" onclick="showToast('Berhasil menambahkan ${item.namaBarang} ke keranjang', 'success')">Tambah</button>
+            <input type="number" id="qty-${originalIndex}" value="1" min="1" max="${item.stok}" style="width: 60px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: white; text-align: center;">
+            <button class="btn add-cart-btn" data-index="${originalIndex}" style="flex-grow: 1; padding: 8px; font-size: 0.9em; border-radius: 8px;">Tambah</button>
             <button class="btn delete-btn" data-index="${originalIndex}" style="background: transparent; border: 1px solid var(--danger); color: var(--danger); padding: 8px; border-radius: 8px;" title="Hapus Buku">&#10006;</button>
           </div>
         </div>
@@ -315,7 +315,110 @@ if (stokGrid && typeof dataBahanAjar !== "undefined") {
         }
       });
     });
+
+    // Attach Add to Cart event listeners
+    document.querySelectorAll(".add-cart-btn").forEach(btn => {
+      btn.addEventListener("click", function() {
+        const idx = this.getAttribute("data-index");
+        const qty = parseInt(document.getElementById(`qty-${idx}`).value);
+        addToCart(dataBahanAjar[idx], qty);
+      });
+    });
   }
+
+  // --- KERANJANG (CART) LOGIC ---
+  let cart = [];
+  
+  // Setup Floating Cart UI
+  const floatingCart = document.createElement("div");
+  floatingCart.id = "floatingCart";
+  floatingCart.style.cssText = "position: fixed; bottom: 30px; right: 30px; background: var(--primary); color: white; padding: 15px 25px; border-radius: 30px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; z-index: 1000; font-weight: bold; transition: 0.3s;";
+  floatingCart.innerHTML = `🛒 Keranjang (<span id="cartCount">0</span>)`;
+  document.body.appendChild(floatingCart);
+
+  // Setup Cart Modal
+  const cartModal = document.createElement("div");
+  cartModal.id = "cartModal";
+  cartModal.className = "modal";
+  cartModal.innerHTML = `
+    <div class="modal-content" style="max-width: 600px;">
+      <span class="close" id="closeCart">&times;</span>
+      <h2>Keranjang Anda</h2>
+      <div id="cartItems" style="margin-top: 20px; max-height: 300px; overflow-y: auto;">
+        <p style="text-align: center; color: var(--text-muted);">Keranjang kosong.</p>
+      </div>
+      <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">Total: <span id="cartTotal">Rp 0</span></h3>
+        <button class="btn" onclick="alert('Checkout berhasil disimulasi!'); document.getElementById('closeCart').click();">Checkout</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(cartModal);
+
+  floatingCart.addEventListener("click", () => {
+    cartModal.style.display = "flex";
+    setTimeout(() => { cartModal.classList.add("show"); }, 10);
+    renderCart();
+  });
+
+  document.getElementById("closeCart").addEventListener("click", () => {
+    cartModal.classList.remove("show");
+    setTimeout(() => { cartModal.style.display = "none"; }, 300);
+  });
+
+  function addToCart(item, qty) {
+    if (qty > item.stok) {
+      showToast("Gagal! Jumlah melebihi stok yang ada.", "error");
+      return;
+    }
+    
+    // Check if item already in cart
+    const existingIndex = cart.findIndex(c => c.kode === item.kodeBarang);
+    if (existingIndex > -1) {
+      cart[existingIndex].qty += qty;
+    } else {
+      const mockPrice = 100000 + (item.edisi * 15000) + (item.kodeBarang.length * 1000);
+      cart.push({
+        kode: item.kodeBarang,
+        nama: item.namaBarang,
+        harga: mockPrice,
+        qty: qty
+      });
+    }
+    document.getElementById("cartCount").innerText = cart.length;
+    showToast(`Berhasil menambahkan ${qty}x ${item.namaBarang} ke keranjang`, "success");
+    
+    // Animate floating cart
+    floatingCart.style.transform = "scale(1.1)";
+    setTimeout(() => floatingCart.style.transform = "scale(1)", 200);
+  }
+
+  function renderCart() {
+    const cartItemsDiv = document.getElementById("cartItems");
+    if (cart.length === 0) {
+      cartItemsDiv.innerHTML = `<p style="text-align: center; color: var(--text-muted);">Keranjang kosong.</p>`;
+      document.getElementById("cartTotal").innerText = "Rp 0";
+      return;
+    }
+
+    let html = `<table style="width: 100%; text-align: left; border-collapse: collapse;">
+      <tr><th style="padding: 8px; border-bottom: 1px solid var(--border);">Barang</th><th style="padding: 8px; border-bottom: 1px solid var(--border);">Qty</th><th style="padding: 8px; border-bottom: 1px solid var(--border);">Subtotal</th></tr>`;
+    
+    let grandTotal = 0;
+    cart.forEach(c => {
+      const subtotal = c.harga * c.qty;
+      grandTotal += subtotal;
+      html += `<tr>
+        <td style="padding: 8px; border-bottom: 1px solid var(--border);">${c.nama}</td>
+        <td style="padding: 8px; border-bottom: 1px solid var(--border);">${c.qty}</td>
+        <td style="padding: 8px; border-bottom: 1px solid var(--border);">Rp ${subtotal.toLocaleString('id-ID')}</td>
+      </tr>`;
+    });
+    html += `</table>`;
+    cartItemsDiv.innerHTML = html;
+    document.getElementById("cartTotal").innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+  }
+  // --- END KERANJANG LOGIC ---
 
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
