@@ -341,15 +341,25 @@ if (stokGrid && typeof dataBahanAjar !== "undefined") {
   cartModal.id = "cartModal";
   cartModal.className = "modal";
   cartModal.innerHTML = `
-    <div class="modal-content" style="max-width: 600px;">
-      <span class="close" id="closeCart">&times;</span>
-      <h2>Keranjang Anda</h2>
-      <div id="cartItems" style="margin-top: 20px; max-height: 300px; overflow-y: auto;">
+    <div class="modal-content" style="max-width: 700px; background: #121212; border: 1px solid #333; border-radius: 12px; color: #fff; padding: 30px;">
+      <span class="close" id="closeCart" style="color: #fff;">&times;</span>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <h2 style="margin: 0; font-size: 1.5em; color: #fff;">Keranjang</h2>
+        <span style="color: #999; font-size: 0.9em;">Atur jumlah, hapus item, lalu checkout.</span>
+      </div>
+      <div id="cartItems" style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
         <p style="text-align: center; color: var(--text-muted);">Keranjang kosong.</p>
       </div>
-      <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px; display: flex; justify-content: space-between; align-items: center;">
-        <h3 style="margin: 0;">Total: <span id="cartTotal">Rp 0</span></h3>
-        <button class="btn" onclick="alert('Checkout berhasil disimulasi!'); document.getElementById('closeCart').click();">Checkout</button>
+      <div style="margin-top: 25px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; font-size: 1em; color: #ccc;">
+          <span>Total Item</span>
+          <span id="cartTotalItem" style="font-weight: bold; color: #fff;">0</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 1.1em; font-weight: bold; margin-bottom: 15px;">
+          <span>Total Harga</span>
+          <span id="cartTotal" style="color: #fff;">Rp 0</span>
+        </div>
+        <button class="btn" style="width: 100%; background: linear-gradient(90deg, #1d4ed8, #3b82f6); border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; color: white;" onclick="checkout()">Checkout</button>
       </div>
     </div>
   `;
@@ -396,28 +406,71 @@ if (stokGrid && typeof dataBahanAjar !== "undefined") {
   function renderCart() {
     const cartItemsDiv = document.getElementById("cartItems");
     if (cart.length === 0) {
-      cartItemsDiv.innerHTML = `<p style="text-align: center; color: var(--text-muted);">Keranjang kosong.</p>`;
+      cartItemsDiv.innerHTML = `<p style="text-align: center; color: #777; margin: 40px 0;">Keranjang kosong.</p>`;
       document.getElementById("cartTotal").innerText = "Rp 0";
+      document.getElementById("cartTotalItem").innerText = "0";
       return;
     }
 
-    let html = `<table style="width: 100%; text-align: left; border-collapse: collapse;">
-      <tr><th style="padding: 8px; border-bottom: 1px solid var(--border);">Barang</th><th style="padding: 8px; border-bottom: 1px solid var(--border);">Qty</th><th style="padding: 8px; border-bottom: 1px solid var(--border);">Subtotal</th></tr>`;
-    
+    let html = '';
     let grandTotal = 0;
-    cart.forEach(c => {
+    let totalItems = 0;
+    
+    cart.forEach((c, index) => {
       const subtotal = c.harga * c.qty;
       grandTotal += subtotal;
-      html += `<tr>
-        <td style="padding: 8px; border-bottom: 1px solid var(--border);">${c.nama}</td>
-        <td style="padding: 8px; border-bottom: 1px solid var(--border);">${c.qty}</td>
-        <td style="padding: 8px; border-bottom: 1px solid var(--border);">Rp ${subtotal.toLocaleString('id-ID')}</td>
-      </tr>`;
+      totalItems += c.qty;
+      html += `
+        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h4 style="margin: 0 0 5px 0; color: #fff; font-size: 1.1em;">${c.nama}</h4>
+            <p style="margin: 0 0 3px 0; color: #888; font-size: 0.85em;">Kode: ${c.kode}</p>
+            <p style="margin: 0; color: #888; font-size: 0.85em;">Harga: Rp ${c.harga.toLocaleString('id-ID')}</p>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+            <div style="display: flex; gap: 10px;">
+              <input type="number" min="1" value="${c.qty}" data-index="${index}" class="cart-qty-input" style="width: 60px; background: #222; border: 1px solid #444; color: #fff; padding: 5px 10px; border-radius: 6px; text-align: center;">
+              <button class="cart-remove-btn" data-index="${index}" style="background: #451a03; color: #fff; border: 1px solid #78350f; padding: 5px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">Hapus</button>
+            </div>
+            <div style="font-weight: bold; color: #fff; font-size: 0.95em;">Subtotal: Rp ${subtotal.toLocaleString('id-ID')}</div>
+          </div>
+        </div>
+      `;
     });
-    html += `</table>`;
     cartItemsDiv.innerHTML = html;
     document.getElementById("cartTotal").innerText = "Rp " + grandTotal.toLocaleString('id-ID');
+    document.getElementById("cartTotalItem").innerText = totalItems;
+
+    // Attach listeners
+    document.querySelectorAll(".cart-remove-btn").forEach(btn => {
+      btn.addEventListener("click", function() {
+        const idx = this.getAttribute("data-index");
+        cart.splice(idx, 1);
+        document.getElementById("cartCount").innerText = cart.length;
+        renderCart();
+      });
+    });
+
+    document.querySelectorAll(".cart-qty-input").forEach(input => {
+      input.addEventListener("change", function() {
+        const idx = this.getAttribute("data-index");
+        let newQty = parseInt(this.value);
+        if (newQty < 1) newQty = 1;
+        cart[idx].qty = newQty;
+        renderCart();
+      });
+    });
   }
+
+  // Global checkout function
+  window.checkout = function() {
+    if(cart.length === 0) return;
+    showToast("Checkout berhasil! Memproses pesanan...", "success");
+    cart = [];
+    document.getElementById("cartCount").innerText = "0";
+    renderCart();
+    setTimeout(() => { document.getElementById('closeCart').click(); }, 1500);
+  };
   // --- END KERANJANG LOGIC ---
 
   if (searchInput) {
