@@ -1,643 +1,743 @@
 /* eslint-disable no-undef, no-unused-vars */
-// AUTHENTICATION CHECK
+// --- AUTHENTICATION & SESSION ---
 const currentPage = window.location.pathname.split("/").pop();
 const isLoginPage = currentPage === "index.html" || currentPage === "" || currentPage === "index";
 
 if (!isLoginPage) {
-  // Jika bukan di halaman login dan belum login, lempar ke index.html
   if (sessionStorage.getItem("isLoggedIn") !== "true") {
     alert("Akses Ditolak! Anda harus login terlebih dahulu.");
     window.location.replace("index.html");
   }
 } else {
-  // Jika di halaman login tapi sudah login, lempar ke dashboard
   if (sessionStorage.getItem("isLoggedIn") === "true") {
     window.location.replace("dashboard.html");
   }
 }
 
-// LOGOUT HANDLER
+// --- GLOBAL DATA & STATE ---
+let cart = JSON.parse(localStorage.getItem("sitta_cart")) || [];
+let historyStore = JSON.parse(localStorage.getItem("sitta_history")) || (typeof dataHistory !== 'undefined' ? dataHistory : []);
+let stockStore = JSON.parse(localStorage.getItem("sitta_stock")) || (typeof dataBahanAjar !== 'undefined' ? dataBahanAjar : []);
+let currentStockView = 'grid';
+
+// --- GLOBAL DOM CONTENT LOADED ---
 document.addEventListener("DOMContentLoaded", () => {
+  setupCommonUI();
+  updateCartBadge();
+  
+  if (document.getElementById("greeting")) renderDashboard();
+  if (document.getElementById("historyTableBody")) renderHistoryTable();
+  if (document.getElementById("stokGrid")) renderStockGrid();
+  
+  setupTracking();
+
+  // Realtime Clock
+  const clockElement = document.getElementById("realtimeClock");
+  if (clockElement) {
+    const updateClock = () => {
+      const now = new Date();
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      const dateString = now.toLocaleDateString('id-ID', options);
+      const timeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
+      clockElement.innerHTML = `<i class="far fa-calendar-alt"></i> ${dateString} <span style="margin-left:15px;"><i class="far fa-clock"></i> ${timeString}</span>`;
+    };
+    updateClock();
+    setInterval(updateClock, 1000);
+  }
+});
+
+// --- COMMON UI SETUP ---
+function setupCommonUI() {
+  // Logout Handler
   document.querySelectorAll('a').forEach(a => {
-    if (a.textContent.trim().toLowerCase() === 'logout') {
+    if (a.textContent.trim().toLowerCase().includes('logout') || a.textContent.trim().toLowerCase().includes('keluar')) {
       a.addEventListener('click', (e) => {
         e.preventDefault();
         sessionStorage.removeItem('isLoggedIn');
-        showToast("Anda telah keluar.", "success");
-        setTimeout(() => {
-          window.location.replace("index.html");
-        }, 800);
+        window.location.replace("index.html");
       });
     }
   });
-});
 
-// CUSTOM TOAST FUNCTION (Classic)
-function showToast(message, type = 'error') {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    document.body.appendChild(container);
-  }
+  // Login Form Validation
+  const loginForm = document.getElementById("loginForm");
+  if (loginForm) {
+    loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const pass = document.getElementById("password").value;
+      const user = dataPengguna.find(u => u.email === email && u.password === pass);
 
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  const svgSuccess = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
-  const svgError = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
-
-  toast.innerHTML = `
-    <span style="display: flex; align-items: center;">${type === 'success' ? svgSuccess : svgError}</span>
-    <span>${message}</span>
-  `;
-
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.classList.add('fade-out');
-    toast.addEventListener('animationend', () => {
-      toast.remove();
-    });
-  }, 4000);
-}
-
-// FORM UTILS
-function addShakeEffect(element) {
-  element.classList.add('shake');
-  setTimeout(() => element.classList.remove('shake'), 400);
-}
-
-// LOGIN VALIDATION
-const form = document.getElementById("loginForm");
-if (form) {
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const emailInput = document.getElementById("email");
-    const passwordInput = document.getElementById("password");
-    const btn = form.querySelector('.btn');
-    
-    // Simple validation
-    if(!emailInput.value || !passwordInput.value) {
-      showToast("Harap isi semua bidang.", "error");
-      addShakeEffect(form);
-      return;
-    }
-
-    const originalText = btn.innerText;
-    btn.innerText = "Memverifikasi...";
-    btn.disabled = true;
-
-    setTimeout(() => {
-      let isAuthenticated = false;
-      let loggedInUser = null;
-      if (typeof dataPengguna !== 'undefined') {
-        for (let i = 0; i < dataPengguna.length; i++) {
-          if (dataPengguna[i].email === emailInput.value && dataPengguna[i].password === passwordInput.value) {
-            isAuthenticated = true;
-            loggedInUser = dataPengguna[i].nama;
-            break;
-          }
-        }
-      } else {
-        // Fallback for testing if data.js is not loaded
-        if (emailInput.value === "admin@ut.ac.id" && passwordInput.value === "12345") {
-          isAuthenticated = true;
-          loggedInUser = "Administrator";
-        }
-      }
-
-      if (isAuthenticated) {
-        showToast("Otentikasi Berhasil. Mengalihkan...", "success");
+      if (user) {
         sessionStorage.setItem("isLoggedIn", "true");
-        sessionStorage.setItem("userName", loggedInUser);
-        setTimeout(() => {
-          window.location.replace("dashboard.html");
-        }, 1500);
+        sessionStorage.setItem("userName", user.nama);
+        window.location.replace("dashboard.html");
       } else {
-        // MENGGUNAKAN ALERT DAN TEKS SESUAI INSTRUKSI
         alert("email/password yang anda masukkan salah");
-        addShakeEffect(form);
-        btn.innerText = originalText;
-        btn.disabled = false;
       }
-    }, 800);
-  });
-}
-
-// MODAL FUNCTION
-const forgotBtn = document.getElementById("forgotBtn");
-const registerBtn = document.getElementById("registerBtn");
-const modals = document.querySelectorAll(".modal");
-const closes = document.querySelectorAll(".close");
-
-if (forgotBtn)
-  forgotBtn.addEventListener("click", (e) => { e.preventDefault(); openModal("forgotModal"); });
-if (registerBtn)
-  registerBtn.addEventListener("click", (e) => { e.preventDefault(); openModal("registerModal"); });
-
-closes.forEach((el) =>
-  el.addEventListener("click", () => {
-    closeAllModals();
-  }),
-);
-
-window.addEventListener("click", (e) => {
-  modals.forEach((m) => {
-    if (e.target === m) {
-      closeAllModals();
-    }
-  });
-});
-
-function openModal(id) {
-  const modal = document.getElementById(id);
-  modal.style.display = "flex";
-  setTimeout(() => { modal.classList.add("show"); }, 10);
-}
-
-function closeAllModals() {
-  modals.forEach((m) => {
-    m.classList.remove("show");
-    setTimeout(() => { m.style.display = "none"; }, 300);
-  });
-}
-
-// GREETING ON DASHBOARD
-const greeting = document.getElementById("greeting");
-if (greeting) {
-  const hour = new Date().getHours();
-  let greetText = "";
-  const userName = sessionStorage.getItem("userName") || "Administrator";
-  if (hour < 12) greetText = `Selamat Pagi, ${userName}.`;
-  else if (hour < 15) greetText = `Selamat Siang, ${userName}.`;
-  else if (hour < 18) greetText = `Selamat Sore, ${userName}.`;
-  else greetText = `Selamat Malam, ${userName}.`;
-  
-  greeting.innerHTML = `<span style="font-size: 1.2em; color: var(--secondary); font-style: italic; font-weight: 600;">${greetText}</span> <br> Selamat datang kembali di panel kontrol SITTA.`;
-}
-
-// REALTIME CLOCK
-const clockElement = document.getElementById("realtimeClock");
-if (clockElement) {
-  function updateClock() {
-    const now = new Date();
-    clockElement.innerText = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " WIB";
-  }
-  updateClock();
-  setInterval(updateClock, 1000);
-}
-
-// TRACKING SIMULATION
-const searchDO = document.getElementById("searchDO");
-if (searchDO) {
-  searchDO.addEventListener("click", () => {
-    const input = document.getElementById("doNumber").value.trim();
-    const result = document.getElementById("trackingResult");
-    if (input === "") {
-      showToast("Mohon masukkan nomor DO/Billing terlebih dahulu.", "error");
-      const inputEl = document.getElementById("doNumber");
-      addShakeEffect(inputEl);
-      return;
-    }
-    
-    result.innerHTML = `<p style="font-style: italic; color: #777;">Mengambil catatan pengiriman...</p>`;
-    
-    setTimeout(() => {
-      let data = null;
-      // Cek di dataTracking static
-      if (typeof dataTracking !== "undefined" && dataTracking[input]) {
-        data = dataTracking[input];
-      } else {
-        // Cek di history tracking dinamis (localStorage/sessionStorage)
-        const dynTracking = JSON.parse(sessionStorage.getItem('dynamicTracking')) || {};
-        if(dynTracking[input]) {
-          data = dynTracking[input];
-        }
-      }
-
-      if (data) {
-        let timelineHTML = '';
-        data.perjalanan.forEach((step, index) => {
-           const isActive = index === data.perjalanan.length - 1 ? 'active' : '';
-           timelineHTML += `
-            <li class="timeline-item ${isActive}">
-              <div class="timeline-date">${step.waktu}</div>
-              <div class="timeline-content">
-                <p>${step.keterangan}</p>
-              </div>
-            </li>
-           `;
-        });
-
-        result.innerHTML = `
-          <h3 style="margin-top: 30px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
-            Status: <span style="color: var(--primary);">${data.status}</span>
-          </h3>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; font-size: 14px;">
-            <div><strong>Penerima:</strong> ${data.nama}</div>
-            <div><strong>Nomor DO:</strong> ${data.nomorDO}</div>
-            <div><strong>Ekspedisi:</strong> ${data.ekspedisi}</div>
-            <div><strong>Tanggal Kirim:</strong> ${data.tanggalKirim}</div>
-            <div><strong>Jenis Paket:</strong> ${data.paket}</div>
-            <div><strong>Total Pembayaran:</strong> ${data.total}</div>
-          </div>
-          
-          <ul class="timeline">
-            ${timelineHTML}
-          </ul>
-        `;
-      } else {
-        result.innerHTML = `<p style="color: var(--danger); font-weight: bold;">Nomor DO/Billing tidak ditemukan dalam sistem.</p>`;
-      }
-    }, 1000);
-  });
-}
-
-// TAMPILKAN DATA STOK (GRID LAYOUT)
-const stokGrid = document.getElementById("stokGrid");
-const searchInput = document.getElementById("searchInput");
-
-if (stokGrid && typeof dataBahanAjar !== "undefined") {
-  
-  function renderGrid(filterText = "") {
-    stokGrid.innerHTML = "";
-    
-    const filteredData = dataBahanAjar.filter(item => {
-      const text = `${item.namaBarang} ${item.kodeBarang} ${item.kodeLokasi}`.toLowerCase();
-      return text.includes(filterText.toLowerCase());
-    });
-
-    if (filteredData.length === 0) {
-      stokGrid.innerHTML = `<p style="text-align: center; font-style: italic; color: #94a3b8; grid-column: 1 / -1;">Tidak ada bahan ajar yang sesuai dengan pencarian.</p>`;
-      return;
-    }
-    
-    filteredData.forEach((item, index) => {
-      const originalIndex = dataBahanAjar.indexOf(item);
-      const card = document.createElement("div");
-      const coverUrl = item.cover ? item.cover : 'assets/placeholder.jpg';
-      
-      // We will generate a mock price for the UI based on edisi/stok
-      const mockPrice = 100000 + (item.edisi * 15000) + (item.kodeBarang.length * 1000);
-      const formattedPrice = "Rp " + mockPrice.toLocaleString('id-ID');
-
-      card.style.background = "var(--surface)";
-      card.style.borderRadius = "16px";
-      card.style.overflow = "hidden";
-      card.style.border = "1px solid var(--border)";
-      card.style.boxShadow = "var(--shadow-sm)";
-      card.style.display = "flex";
-      card.style.flexDirection = "column";
-
-      card.innerHTML = `
-        <div style="position: relative; height: 260px; overflow: hidden; background: linear-gradient(135deg, #1e3a8a, #0f172a); display: flex; align-items: center; justify-content: center;">
-          <span style="position: absolute; color: rgba(255,255,255,0.2); font-weight: bold; font-size: 1.5em; text-align: center; padding: 10px;">${item.namaBarang}</span>
-          <img src="${coverUrl}" alt="" style="width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1;" onerror="this.style.display='none'">
-        </div>
-        <div style="padding: 15px; flex-grow: 1; display: flex; flex-direction: column;">
-          <h3 style="margin: 0 0 10px; font-size: 1.2em; color: var(--text-main);">${item.namaBarang}</h3>
-          <p style="margin: 0 0 5px; color: var(--text-muted); font-size: 0.9em;">Kode: ${item.kodeBarang}</p>
-          <p style="margin: 0 0 5px; color: var(--text-muted); font-size: 0.9em;">Stok: <strong>${item.stok}</strong></p>
-          <p style="margin: 0 0 15px; color: var(--text-muted); font-size: 0.9em;">Edisi: ${item.edisi}</p>
-          
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto; margin-bottom: 15px;">
-            <span style="color: var(--secondary); font-weight: bold; font-size: 1.2em;">${formattedPrice}</span>
-            <span style="background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 20px; font-size: 0.8em; font-weight: bold;">${item.jenisBarang}</span>
-          </div>
-
-          <div style="display: flex; gap: 10px;">
-            <input type="number" id="qty-${originalIndex}" value="1" min="1" max="${item.stok}" style="width: 60px; padding: 8px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px solid var(--border); color: white; text-align: center;">
-            <button class="btn add-cart-btn" data-index="${originalIndex}" style="flex-grow: 1; padding: 8px; font-size: 0.9em; border-radius: 8px;">Tambah</button>
-            <button class="btn delete-btn" data-index="${originalIndex}" style="background: transparent; border: 1px solid var(--danger); color: var(--danger); padding: 8px; border-radius: 8px;" title="Hapus Buku">&#10006;</button>
-          </div>
-        </div>
-      `;
-      stokGrid.appendChild(card);
-    });
-
-    // Attach delete event listeners
-    document.querySelectorAll(".delete-btn").forEach(btn => {
-      btn.addEventListener("click", function() {
-        const idx = this.getAttribute("data-index");
-        if(confirm(`Apakah Anda yakin ingin menghapus catatan '${dataBahanAjar[idx].namaBarang}'?`)) {
-          dataBahanAjar.splice(idx, 1);
-          renderGrid(searchInput ? searchInput.value : "");
-          showToast("Catatan stok telah dihapus.", "success");
-        }
-      });
-    });
-
-    // Attach Add to Cart event listeners
-    document.querySelectorAll(".add-cart-btn").forEach(btn => {
-      btn.addEventListener("click", function() {
-        const idx = this.getAttribute("data-index");
-        const qty = parseInt(document.getElementById(`qty-${idx}`).value);
-        addToCart(dataBahanAjar[idx], qty);
-      });
     });
   }
 
-  // --- KERANJANG (CART) LOGIC ---
-  let cart = [];
+  // Modal Handlers
+  const closes = document.querySelectorAll(".close");
+  closes.forEach(el => {
+    el.addEventListener("click", () => {
+      const modal = el.closest(".modal");
+      if (modal) {
+        modal.classList.remove("show");
+        setTimeout(() => modal.style.display = "none", 300);
+      }
+    });
+  });
+
+  // Dropdown Click Toggle (ONLY ON CLICK)
+  const dropdowns = document.querySelectorAll(".dropdown");
+  dropdowns.forEach(dd => {
+    const link = dd.querySelector("a");
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // Stop from closing immediately
+      dd.classList.toggle("show");
+    });
+  });
+
+  // Close dropdown when clicking outside
+  window.addEventListener("click", (e) => {
+    dropdowns.forEach(dd => {
+      if (!dd.contains(e.target)) {
+        dd.classList.remove("show");
+      }
+    });
+  });
+}
+
+// --- DASHBOARD LOGIC ---
+function renderDashboard() {
+  const userName = sessionStorage.getItem("userName") || "Rina Wulandari";
+  const greetingEl = document.getElementById("greeting");
+  if (greetingEl) greetingEl.innerText = `Selamat Datang, ${userName}`;
+
+  // Update Stats
+  const statStok = document.getElementById("statTotalStok");
+  if (statStok) statStok.innerText = stockStore.reduce((acc, curr) => acc + curr.stok, 0).toLocaleString('id-ID');
   
-  // Setup Floating Cart UI
-  const floatingCart = document.createElement("div");
-  floatingCart.id = "floatingCart";
-  floatingCart.style.cssText = "position: fixed; bottom: 30px; right: 30px; background: var(--primary); color: white; padding: 15px 25px; border-radius: 30px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; z-index: 1000; font-weight: bold; transition: 0.3s;";
-  floatingCart.innerHTML = `🛒 Keranjang (<span id="cartCount">0</span>)`;
-  document.body.appendChild(floatingCart);
+  const statSelesai = document.getElementById("statDOSelesai");
+  if (statSelesai) statSelesai.innerText = historyStore.filter(h => h.status === 'Selesai').length;
+  
+  const statProses = document.getElementById("statDOProses");
+  if (statProses) statProses.innerText = historyStore.filter(h => h.status === 'Proses').length;
+  
+  const statLimit = document.getElementById("statStokLimit");
+  if (statLimit) statLimit.innerText = stockStore.filter(b => b.stok < (b.limit * 0.2)).length;
 
-  // Setup Cart Modal
-  const cartModal = document.createElement("div");
-  cartModal.id = "cartModal";
-  cartModal.className = "modal";
-  cartModal.innerHTML = `
-    <div class="modal-content" style="max-width: 700px; background: #121212; border: 1px solid #333; border-radius: 12px; color: #fff; padding: 30px;">
-      <span class="close" id="closeCart" style="color: #fff;">&times;</span>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h2 style="margin: 0; font-size: 1.5em; color: #fff;">Keranjang</h2>
-        <span style="color: #999; font-size: 0.9em;">Atur jumlah, hapus item, lalu checkout.</span>
-      </div>
-      <div id="cartItems" style="max-height: 400px; overflow-y: auto; padding-right: 10px;">
-        <p style="text-align: center; color: var(--text-muted);">Keranjang kosong.</p>
-      </div>
-      <div style="margin-top: 25px; display: flex; flex-direction: column; gap: 10px;">
-        <div style="display: flex; justify-content: space-between; font-size: 1em; color: #ccc;">
-          <span>Total Item</span>
-          <span id="cartTotalItem" style="font-weight: bold; color: #fff;">0</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; font-size: 1.1em; font-weight: bold; margin-bottom: 15px;">
-          <span>Total Harga</span>
-          <span id="cartTotal" style="color: #fff;">Rp 0</span>
-        </div>
-        <button class="btn" style="width: 100%; background: linear-gradient(90deg, #1d4ed8, #3b82f6); border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; color: white;" onclick="checkout()">Checkout</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(cartModal);
-
-  floatingCart.addEventListener("click", () => {
-    cartModal.style.display = "flex";
-    setTimeout(() => { cartModal.classList.add("show"); }, 10);
-    renderCart();
-  });
-
-  document.getElementById("closeCart").addEventListener("click", () => {
-    cartModal.classList.remove("show");
-    setTimeout(() => { cartModal.style.display = "none"; }, 300);
-  });
-
-  function addToCart(item, qty) {
-    if (qty > item.stok) {
-      showToast("Gagal! Jumlah melebihi stok yang ada.", "error");
-      return;
-    }
-    
-    // Check if item already in cart
-    const existingIndex = cart.findIndex(c => c.kode === item.kodeBarang);
-    if (existingIndex > -1) {
-      cart[existingIndex].qty += qty;
-    } else {
-      const mockPrice = 100000 + (item.edisi * 15000) + (item.kodeBarang.length * 1000);
-      cart.push({
-        kode: item.kodeBarang,
-        nama: item.namaBarang,
-        harga: mockPrice,
-        qty: qty
-      });
-    }
-    document.getElementById("cartCount").innerText = cart.length;
-    showToast(`Berhasil menambahkan ${qty}x ${item.namaBarang} ke keranjang`, "success");
-    
-    // Animate floating cart
-    floatingCart.style.transform = "scale(1.1)";
-    setTimeout(() => floatingCart.style.transform = "scale(1)", 200);
-  }
-
-  function renderCart() {
-    const cartItemsDiv = document.getElementById("cartItems");
-    if (cart.length === 0) {
-      cartItemsDiv.innerHTML = `<p style="text-align: center; color: #777; margin: 40px 0;">Keranjang kosong.</p>`;
-      document.getElementById("cartTotal").innerText = "Rp 0";
-      document.getElementById("cartTotalItem").innerText = "0";
-      return;
-    }
-
-    let html = '';
-    let grandTotal = 0;
-    let totalItems = 0;
-    
-    cart.forEach((c, index) => {
-      const subtotal = c.harga * c.qty;
-      grandTotal += subtotal;
-      totalItems += c.qty;
+  // Recent Activity Table
+  const tableBody = document.getElementById("recentActivityTable");
+  if (tableBody) {
+    let html = "";
+    historyStore.slice(0, 5).forEach(h => {
+      const statusClass = h.status === 'Selesai' ? 'badge-success' : 'badge-warning';
       html += `
-        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <h4 style="margin: 0 0 5px 0; color: #fff; font-size: 1.1em;">${c.nama}</h4>
-            <p style="margin: 0 0 3px 0; color: #888; font-size: 0.85em;">Kode: ${c.kode}</p>
-            <p style="margin: 0; color: #888; font-size: 0.85em;">Harga: Rp ${c.harga.toLocaleString('id-ID')}</p>
+        <tr>
+          <td><strong>${h.id}</strong></td>
+          <td>${h.tanggal}</td>
+          <td>${h.pengguna}</td>
+          <td>${h.bahanAjar}</td>
+          <td><span class="badge ${statusClass}">${h.status}</span></td>
+        </tr>
+      `;
+    });
+    tableBody.innerHTML = html;
+  }
+
+  // Stock List Dashboard (Progress Bars)
+  const stockList = document.getElementById("stockListDashboard");
+  if (stockList) {
+    let stockHtml = "";
+    stockStore.slice(0, 5).forEach(b => {
+      const percent = Math.min((b.stok / b.limit) * 100, 100);
+      const color = percent < 20 ? '#ef4444' : percent < 50 ? '#f59e0b' : '#3b82f6';
+      stockHtml += `
+        <div style="margin-bottom: 15px;">
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 5px;">
+            <span>${b.namaBarang}</span>
+            <span>${b.stok} <small style="color: var(--text-muted);">/ ${b.limit}</small></span>
           </div>
-          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
-            <div style="display: flex; gap: 10px;">
-              <input type="number" min="1" value="${c.qty}" data-index="${index}" class="cart-qty-input" style="width: 60px; background: #222; border: 1px solid #444; color: #fff; padding: 5px 10px; border-radius: 6px; text-align: center;">
-              <button class="cart-remove-btn" data-index="${index}" style="background: #451a03; color: #fff; border: 1px solid #78350f; padding: 5px 15px; border-radius: 6px; cursor: pointer; font-weight: bold;">Hapus</button>
-            </div>
-            <div style="font-weight: bold; color: #fff; font-size: 0.95em;">Subtotal: Rp ${subtotal.toLocaleString('id-ID')}</div>
+          <div class="progress-container" style="height: 6px;">
+            <div class="progress-bar" style="width: ${percent}%; background: ${color};"></div>
           </div>
         </div>
       `;
     });
-    cartItemsDiv.innerHTML = html;
-    document.getElementById("cartTotal").innerText = "Rp " + grandTotal.toLocaleString('id-ID');
-    document.getElementById("cartTotalItem").innerText = totalItems;
+    stockList.innerHTML = stockHtml;
+  }
 
-    // Attach listeners
-    document.querySelectorAll(".cart-remove-btn").forEach(btn => {
-      btn.addEventListener("click", function() {
-        const idx = this.getAttribute("data-index");
-        cart.splice(idx, 1);
-        document.getElementById("cartCount").innerText = cart.length;
-        renderCart();
-      });
+  // User Activity List
+  const userList = document.getElementById("userActivityList");
+  if (userList) {
+    let userHtml = "";
+    const userStats = {};
+    historyStore.forEach(h => {
+      userStats[h.pengguna] = (userStats[h.pengguna] || 0) + h.jumlah;
+    });
+    Object.keys(userStats).sort((a,b) => userStats[b] - userStats[a]).slice(0, 4).forEach(user => {
+      const val = userStats[user];
+      const maxVal = Math.max(...Object.values(userStats), 1);
+      const percent = (val / maxVal) * 100;
+      userHtml += `
+        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+          <div style="flex: 1;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+              <span>${user}</span>
+              <strong>${val} eks</strong>
+            </div>
+            <div class="progress-container" style="height: 6px;">
+              <div class="progress-bar" style="width: ${percent}%; background: #10b981;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    userList.innerHTML = userHtml;
+  }
+}
+
+// --- HISTORY TABLE LOGIC ---
+function renderHistoryTable() {
+  const tableBody = document.getElementById("historyTableBody");
+  const searchInput = document.getElementById("historySearch");
+  const statusFilter = document.getElementById("statusFilter");
+  const dateFilter = document.getElementById("dateFilter");
+  const resetBtn = document.getElementById("resetFilterBtn");
+  const exportBtn = document.getElementById("exportCsvBtn");
+
+  const filterAndRender = () => {
+    if (!tableBody) return;
+    const q = searchInput ? searchInput.value.toLowerCase() : "";
+    const status = statusFilter ? statusFilter.value : "Semua";
+    const date = dateFilter ? dateFilter.value : "";
+
+    const filtered = historyStore.filter(h => {
+      const matchSearch = h.pengguna.toLowerCase().includes(q) || h.bahanAjar.toLowerCase().includes(q) || h.id.toLowerCase().includes(q) || h.do.includes(q);
+      const matchStatus = status === "Semua" || h.status === status;
+      const matchDate = !date || h.tanggal === date;
+      return matchSearch && matchStatus && matchDate;
     });
 
-    document.querySelectorAll(".cart-qty-input").forEach(input => {
-      input.addEventListener("change", function() {
-        const idx = this.getAttribute("data-index");
-        let newQty = parseInt(this.value);
-        if (newQty < 1) newQty = 1;
-        cart[idx].qty = newQty;
-        renderCart();
+    let html = "";
+    filtered.forEach(h => {
+      const statusClass = h.status === 'Selesai' ? 'badge-success' : 'badge-warning';
+      html += `
+        <tr>
+          <td><strong>${h.id}</strong></td>
+          <td>${h.tanggal}</td>
+          <td><code>${h.do}</code><br><small style="color:var(--primary)">${h.resi || '-'}</small></td>
+          <td>${h.bill || '-'}</td>
+          <td>${h.pengguna}</td>
+          <td>${h.bahanAjar}</td>
+          <td>${h.jumlah} eks</td>
+          <td><span class="badge ${statusClass}">${h.status}</span></td>
+          <td><a href="tracking.html?do=${h.do}" style="color: var(--primary); font-weight: 700; text-decoration: none;">Detail</a></td>
+        </tr>
+      `;
+    });
+    tableBody.innerHTML = html || '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">Tidak ada data yang ditemukan.</td></tr>';
+    
+    if (document.getElementById("showingCount")) document.getElementById("showingCount").innerText = filtered.length;
+    if (document.getElementById("totalCount")) document.getElementById("totalCount").innerText = historyStore.length;
+  };
+
+  if (searchInput) {
+    searchInput.addEventListener("input", filterAndRender);
+    statusFilter.addEventListener("change", filterAndRender);
+    dateFilter.addEventListener("change", filterAndRender);
+    resetBtn.addEventListener("click", () => {
+      searchInput.value = "";
+      statusFilter.value = "Semua";
+      dateFilter.value = "";
+      filterAndRender();
+    });
+  }
+
+  if (exportBtn) {
+    exportBtn.addEventListener("click", () => {
+      exportToCSV(historyStore, "Histori_Transaksi_SITTA.csv");
+    });
+  }
+
+  filterAndRender();
+}
+
+// --- STOCK GRID & TABLE LOGIC ---
+function renderStockGrid() {
+  const container = document.getElementById("stokGrid");
+  const searchInput = document.getElementById("searchInput");
+  const typeFilter = document.getElementById("typeFilter");
+  const viewBtns = document.querySelectorAll(".view-btn");
+
+  const filterAndRender = () => {
+    if (!container) return;
+    const q = searchInput ? searchInput.value.toLowerCase() : "";
+    const type = typeFilter ? typeFilter.value : "Semua";
+
+    const filtered = stockStore.filter(b => {
+      const matchSearch = b.namaBarang.toLowerCase().includes(q) || b.kodeBarang.toLowerCase().includes(q);
+      const matchType = type === "Semua" || b.jenisBarang === type;
+      return matchSearch && matchType;
+    });
+
+    if (currentStockView === 'grid') {
+      container.style.display = "grid";
+      container.style.gridTemplateColumns = "repeat(auto-fill, minmax(280px, 1fr))";
+      let html = "";
+      filtered.forEach((b) => {
+        const percent = (b.stok / b.limit) * 100;
+        const statusClass = percent < 20 ? 'badge-danger' : percent < 50 ? 'badge-warning' : 'badge-success';
+        const barColor = percent < 20 ? '#ef4444' : percent < 50 ? '#f59e0b' : '#3b82f6';
+        const coverUrl = b.cover || 'img/placeholder.jpg';
+
+        html += `
+          <div class="stock-card" style="animation: fadeIn 0.3s ease forwards;">
+            <div style="height: 180px; overflow: hidden; background: #000; position: relative;">
+              <img src="${coverUrl}" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.7;" onerror="this.src='https://via.placeholder.com/200x300?text=No+Cover'">
+              <div style="position: absolute; bottom: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between;">
+                 <span class="badge ${statusClass}" style="font-size: 10px;">${b.jenisBarang}</span>
+              </div>
+            </div>
+            <div style="padding: 15px;">
+              <h4 style="color: var(--secondary); font-size: 11px; margin-bottom: 5px;">${b.kodeBarang}</h4>
+              <h3 style="font-size: 16px; margin-bottom: 15px; height: 40px; overflow: hidden;">${b.namaBarang}</h3>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 13px;">
+                <span style="color: var(--text-muted);">Edisi ${b.edisi}</span>
+                <span style="font-weight: 700; color: ${barColor}">${b.stok} eks</span>
+              </div>
+              <div class="progress-container" style="height: 6px; margin-bottom: 15px;">
+                <div class="progress-bar" style="width: ${percent}%; background: ${barColor}"></div>
+              </div>
+              <button onclick="addToCart('${b.kodeBarang}')" class="btn" style="width: 100%; padding: 10px; font-size: 13px; background: var(--primary);">
+                <i class="fas fa-cart-plus"></i> Tambah ke Keranjang
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html || '<p style="grid-column: 1/-1; text-align: center; padding: 40px;">Tidak ada data.</p>';
+    } else {
+      container.style.display = "block";
+      let tableHtml = `
+        <div class="table-wrapper" style="margin-top: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+          <table>
+            <thead>
+              <tr>
+                <th>Cover</th>
+                <th>Kode</th>
+                <th>Nama Bahan Ajar</th>
+                <th>Edisi</th>
+                <th>Stok</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      filtered.forEach(b => {
+        const percent = (b.stok / b.limit) * 100;
+        const statusClass = percent < 20 ? 'badge-danger' : percent < 50 ? 'badge-warning' : 'badge-success';
+        const coverUrl = b.cover || 'img/placeholder.jpg';
+        tableHtml += `
+          <tr>
+            <td style="width: 60px;"><img src="${coverUrl}" style="width: 40px; height: 50px; object-fit: cover; border-radius: 4px;" onerror="this.src='https://via.placeholder.com/40x50?text=x'"></td>
+            <td><code>${b.kodeBarang}</code></td>
+            <td style="font-weight: 600;">${b.namaBarang}</td>
+            <td>${b.edisi}</td>
+            <td><strong>${b.stok}</strong></td>
+            <td><span class="badge ${statusClass}">${percent < 20 ? 'Limit' : 'Aman'}</span></td>
+            <td><button onclick="addToCart('${b.kodeBarang}')" class="btn btn-small" style="padding: 8px;"><i class="fas fa-cart-plus"></i></button></td>
+          </tr>
+        `;
+      });
+      tableHtml += `</tbody></table></div>`;
+      container.innerHTML = tableHtml;
+    }
+  };
+
+  if (viewBtns) {
+    viewBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        viewBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentStockView = btn.getAttribute("data-view");
+        filterAndRender();
       });
     });
   }
 
-  // Setup Receipt Modal
-  const receiptModal = document.createElement("div");
-  receiptModal.id = "receiptModal";
-  receiptModal.className = "modal";
-  document.body.appendChild(receiptModal);
+  if (searchInput) {
+    searchInput.addEventListener("input", filterAndRender);
+    typeFilter.addEventListener("change", filterAndRender);
+  }
 
-  // Global checkout function
-  window.checkout = function() {
-    if(cart.length === 0) return;
-    
-    // Generate Resi / DO
-    const timestamp = new Date();
-    const resiStr = "DO-" + timestamp.getTime().toString().slice(-6);
-    
-    let grandTotal = 0;
-    let totalItems = 0;
-    let receiptItemsHTML = '';
-    
-    cart.forEach(c => {
-      const sub = c.harga * c.qty;
-      grandTotal += sub;
-      totalItems += c.qty;
-      receiptItemsHTML += `
-        <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px; color: #ccc;">
-          <span>${c.qty}x ${c.nama}</span>
-          <span>Rp ${sub.toLocaleString('id-ID')}</span>
-        </div>
-      `;
+  const addForm = document.getElementById("addForm");
+  if (addForm) {
+    addForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const newItem = {
+        kodeLokasi: document.getElementById("lokasi").value,
+        kodeBarang: document.getElementById("kode").value,
+        namaBarang: document.getElementById("nama").value,
+        jenisBarang: document.getElementById("jenis").value,
+        edisi: document.getElementById("edisi").value,
+        stok: parseInt(document.getElementById("stok").value),
+        limit: 1000,
+        cover: "img/placeholder.jpg"
+      };
+      stockStore.unshift(newItem);
+      localStorage.setItem("sitta_stock", JSON.stringify(stockStore));
+      filterAndRender();
+      addForm.reset();
+      const closeBtn = document.querySelector(".modal .close");
+      if (closeBtn) closeBtn.click();
     });
-    
-    const formattedTotal = "Rp " + grandTotal.toLocaleString('id-ID');
-    const dateStr = timestamp.toLocaleString('id-ID');
-    
-    // Generate Struk HTML
-    receiptModal.innerHTML = `
-      <div class="modal-content" style="max-width: 400px; background: #fff; color: #000; border-radius: 8px; font-family: monospace; padding: 30px;">
-        <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 15px; margin-bottom: 15px;">
-          <h2 style="margin: 0;">SITTA UT</h2>
-          <p style="margin: 5px 0 0;">Struk Pembelian Bahan Ajar</p>
+  }
+
+  filterAndRender();
+}
+
+// --- CART LOGIC ---
+function updateCartBadge() {
+  const badge = document.getElementById("cartCount");
+  if (badge) {
+    const total = cart.reduce((acc, item) => acc + item.qty, 0);
+    badge.innerText = total;
+    badge.style.display = total > 0 ? "flex" : "none";
+  }
+}
+
+function addToCart(kode) {
+  const item = stockStore.find(b => b.kodeBarang === kode);
+  if (!item) return;
+
+  if (item.stok < 1) {
+    alert("Maaf, stok barang ini sedang kosong!");
+    return;
+  }
+
+  const inCart = cart.find(c => c.kode === kode);
+  if (inCart) {
+    inCart.qty++;
+  } else {
+    cart.push({ kode: item.kodeBarang, nama: item.namaBarang, qty: 1, price: 150000 });
+  }
+
+  localStorage.setItem("sitta_cart", JSON.stringify(cart));
+  updateCartBadge();
+  showToast(`Berhasil menambahkan ${item.namaBarang}`);
+}
+
+function showToast(msg) {
+  let toast = document.querySelector(".sitta-toast");
+  if (toast) toast.remove();
+  
+  toast = document.createElement("div");
+  toast.className = "sitta-toast success";
+  toast.style.cssText = "position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; padding: 12px 25px; background: var(--success); color: white; border-radius: 30px; box-shadow: var(--shadow-lg); animation: slideUp 0.3s ease; display: flex; align-items: center;";
+  toast.innerHTML = `<i class="fas fa-check-circle" style="margin-right: 10px;"></i> ${msg}`;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = "fadeOut 0.3s ease";
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function openCart() {
+  const modal = document.getElementById("cartModal");
+  if (!modal) return;
+  renderCartItems();
+  modal.style.display = "flex";
+  setTimeout(() => modal.classList.add("show"), 10);
+}
+
+function renderCartItems() {
+  const list = document.getElementById("cartList");
+  const totalEl = document.getElementById("cartTotal");
+  if (!list) return;
+
+  if (cart.length === 0) {
+    list.innerHTML = `<div style="text-align: center; padding: 40px; color: var(--text-muted);"><i class="fas fa-shopping-basket" style="font-size: 40px; margin-bottom: 15px; opacity: 0.3;"></i><p>Keranjang masih kosong.</p></div>`;
+    totalEl.innerText = "Rp 0";
+    return;
+  }
+
+  let html = "";
+  let total = 0;
+  cart.forEach((item, idx) => {
+    const subtotal = item.price * item.qty;
+    total += subtotal;
+    html += `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); margin-bottom: 10px; border-radius: 8px;">
+        <div style="flex: 1;">
+          <h4 style="margin: 0; font-size: 14px; color: var(--secondary);">${item.kode}</h4>
+          <p style="margin: 3px 0; font-size: 13px; font-weight: 500;">${item.nama}</p>
+          <div style="font-size: 12px; color: var(--text-muted);">Rp ${item.price.toLocaleString()} x ${item.qty}</div>
         </div>
-        <p style="margin: 5px 0;"><strong>No Resi / DO:</strong> ${resiStr}</p>
-        <p style="margin: 5px 0;"><strong>Tanggal:</strong> ${dateStr}</p>
-        <p style="margin: 5px 0;"><strong>Penerima:</strong> ${sessionStorage.getItem('userName') || 'Pelanggan'}</p>
-        <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; margin: 15px 0; padding: 15px 0;">
-          ${receiptItemsHTML}
-        </div>
-        <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 1.2em;">
-          <span>TOTAL</span>
-          <span>${formattedTotal}</span>
-        </div>
-        <div style="text-align: center; margin-top: 30px;">
-          <p style="font-size: 0.9em; margin-bottom: 20px;">Terima kasih atas pesanan Anda!</p>
-          <button class="btn" onclick="document.getElementById('receiptModal').classList.remove('show'); setTimeout(() => { document.getElementById('receiptModal').style.display='none'; }, 300);" style="background: #111; color: white;">Tutup Struk</button>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button onclick="changeQty(${idx}, -1)" class="btn btn-small" style="padding: 5px 12px; background: var(--surface); border: 1px solid var(--border);">-</button>
+          <span style="font-weight: 700; min-width: 20px; text-align: center;">${item.qty}</span>
+          <button onclick="changeQty(${idx}, 1)" class="btn btn-small" style="padding: 5px 12px; background: var(--surface); border: 1px solid var(--border);">+</button>
+          <button onclick="removeFromCart(${idx})" style="color: var(--danger); background: none; border: none; cursor: pointer; margin-left: 10px; font-size: 16px;"><i class="fas fa-trash-alt"></i></button>
         </div>
       </div>
     `;
+  });
+  list.innerHTML = html;
+  totalEl.innerText = `Rp ${total.toLocaleString()}`;
+}
 
-    // Save to History
-    let histori = JSON.parse(sessionStorage.getItem('historiTransaksi')) || [];
-    histori.unshift({
-      resi: resiStr,
+window.changeQty = (idx, delta) => {
+  cart[idx].qty += delta;
+  if (cart[idx].qty < 1) cart[idx].qty = 1;
+  localStorage.setItem("sitta_cart", JSON.stringify(cart));
+  renderCartItems();
+  updateCartBadge();
+};
+
+window.removeFromCart = (idx) => {
+  cart.splice(idx, 1);
+  localStorage.setItem("sitta_cart", JSON.stringify(cart));
+  renderCartItems();
+  updateCartBadge();
+};
+
+window.checkout = () => {
+  if (cart.length === 0) return;
+
+  const trxId = "TRX-" + Math.floor(Math.random() * 100000);
+  const doId = "DO-" + (2026000000 + Math.floor(Math.random() * 10000));
+  const billId = "BILL-" + Math.floor(Math.random() * 90000 + 10000);
+  const resiId = "RESI-UT" + Math.floor(Math.random() * 900000 + 100000);
+  
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const userName = sessionStorage.getItem("userName") || "Rina Wulandari";
+
+  // Create Receipt Content
+  let itemsHtml = "";
+  let total = 0;
+  cart.forEach(item => {
+    const sub = item.price * item.qty;
+    total += sub;
+    itemsHtml += `
+      <div class="receipt-item">
+        <span>${item.nama} x${item.qty}</span>
+        <span>Rp ${sub.toLocaleString()}</span>
+      </div>
+    `;
+
+    // Deduct Stock
+    const stockItem = stockStore.find(b => b.kodeBarang === item.kode);
+    if (stockItem) {
+      stockItem.stok -= item.qty;
+      if (stockItem.stok < 0) stockItem.stok = 0;
+    }
+
+    // Add to History Store
+    historyStore.unshift({
+      id: trxId,
       tanggal: dateStr,
-      items: totalItems,
-      total: formattedTotal
+      do: doId,
+      bill: billId,
+      resi: resiId,
+      pengguna: userName,
+      bahanAjar: item.nama,
+      jumlah: item.qty,
+      status: "Proses"
     });
-    sessionStorage.setItem('historiTransaksi', JSON.stringify(histori));
+  });
 
-    // Save dynamic tracking
-    let dynTracking = JSON.parse(sessionStorage.getItem('dynamicTracking')) || {};
-    dynTracking[resiStr] = {
-      nama: sessionStorage.getItem('userName') || 'Pelanggan',
-      nomorDO: resiStr,
-      ekspedisi: "SITTA Express",
-      tanggalKirim: dateStr,
-      paket: "Bahan Ajar",
-      total: formattedTotal,
-      status: "Diproses",
-      perjalanan: [
-        { waktu: dateStr, keterangan: "Pesanan dibuat dan pembayaran berhasil dikonfirmasi." },
-        { waktu: "Menunggu", keterangan: "Pesanan sedang disiapkan untuk pengiriman." }
-      ]
-    };
-    sessionStorage.setItem('dynamicTracking', JSON.stringify(dynTracking));
+  const receiptHtml = `
+    <div class="receipt-paper">
+      <div class="receipt-header" style="margin-bottom: 10px;">
+        <h3 style="margin: 0; color: #000; font-size: 16px;">SITTA UNIVERSITAS TERBUKA</h3>
+        <p style="font-size: 9px; margin: 3px 0;">Sistem Informasi Transaksi & Tracking Bahan Ajar</p>
+        <p style="font-size: 11px; font-weight: bold; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px;">STRUK PENGIRIMAN RESMI</p>
+      </div>
+      <div style="font-size: 11px; margin-bottom: 10px; line-height: 1.4;">
+        <div style="display: flex; justify-content: space-between;"><span>ID TRX:</span> <strong>${trxId}</strong></div>
+        <div style="display: flex; justify-content: space-between;"><span>NO. DO:</span> <strong>${doId}</strong></div>
+        <div style="display: flex; justify-content: space-between; color: #d32f2f;"><span>NO. BILLING:</span> <strong>${billId}</strong></div>
+        <div style="display: flex; justify-content: space-between; color: #1976d2;"><span>NO. RESI:</span> <strong>${resiId}</strong></div>
+        <div style="display: flex; justify-content: space-between; border-top: 1px dashed #ccc; margin-top: 5px; padding-top: 5px;"><span>TANGGAL:</span> <span>${dateStr}</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>PETUGAS:</span> <span>${userName}</span></div>
+      </div>
+      <div style="border-top: 1px solid #000; padding-top: 8px;">
+        ${itemsHtml}
+      </div>
+      <div class="receipt-total" style="font-size: 16px; margin-top: 10px;">
+        <span>TOTAL:</span>
+        <span>Rp ${total.toLocaleString()}</span>
+      </div>
+      <div class="receipt-footer">
+        <p style="font-weight: bold;">BARANG DALAM PROSES KIRIM</p>
+        <p>Silakan pantau nomor resi di menu Tracking.</p>
+        <p style="margin-top: 8px; font-size: 9px; opacity: 0.7;">Waktu: ${new Date().toLocaleString()}</p>
+      </div>
+    </div>
+  `;
 
-    // Cleanup Cart
-    cart = [];
-    document.getElementById("cartCount").innerText = "0";
-    renderCart();
-    document.getElementById('closeCart').click();
-    
-    // Show Receipt
-    showToast("Checkout berhasil! Memproses pesanan...", "success");
-    setTimeout(() => {
-      receiptModal.style.display = "flex";
-      setTimeout(() => { receiptModal.classList.add("show"); }, 10);
-    }, 500);
-  };
-  // --- END KERANJANG LOGIC ---
-
-  if (searchInput) {
-    searchInput.addEventListener("input", (e) => {
-      renderGrid(e.target.value);
-    });
+  // Update Persistence
+  localStorage.setItem("sitta_history", JSON.stringify(historyStore));
+  localStorage.setItem("sitta_stock", JSON.stringify(stockStore));
+  
+  // Refresh UI
+  if (typeof renderStockGrid === 'function' && document.getElementById("stokGrid")) renderStockGrid();
+  if (typeof renderDashboard === 'function' && document.getElementById("greeting")) renderDashboard();
+  
+  // Show Receipt Modal
+  const receiptModal = document.getElementById("receiptModal");
+  const receiptContent = document.getElementById("receiptContent");
+  if (receiptModal && receiptContent) {
+    receiptContent.innerHTML = receiptHtml;
+    receiptModal.style.display = "flex";
+    setTimeout(() => receiptModal.classList.add("show"), 10);
   }
 
-  renderGrid();
+  // Clear Cart
+  cart = [];
+  localStorage.setItem("sitta_cart", JSON.stringify(cart));
+  
+  // Close Cart Modal
+  const modal = document.getElementById("cartModal");
+  if (modal) {
+    modal.classList.remove("show");
+    setTimeout(() => modal.style.display = "none", 300);
+  }
+  
+  updateCartBadge();
+};
 
-// Render Histori Transaksi di Dashboard
-const historiGrid = document.getElementById("historiGrid");
-if (historiGrid) {
-  const histori = JSON.parse(sessionStorage.getItem('historiTransaksi')) || [];
-  if (histori.length === 0) {
-    historiGrid.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Belum ada histori transaksi.</p>`;
-  } else {
-    let html = '';
-    histori.forEach(h => {
-      html += `
-        <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-          <div>
-            <h4 style="margin: 0 0 5px 0; color: var(--text-main);">No Resi: <span style="color: var(--primary);">${h.resi}</span></h4>
-            <p style="margin: 0 0 5px 0; color: var(--text-muted); font-size: 0.9em;">Tanggal: ${h.tanggal}</p>
-            <p style="margin: 0; color: var(--text-muted); font-size: 0.9em;">Jumlah Item: ${h.items} buku</p>
+// --- TRACKING LOGIC ---
+function setupTracking() {
+  const searchBtn = document.getElementById("searchDO");
+  const doInput = document.getElementById("doNumber");
+  const resultDiv = document.getElementById("trackingResult");
+  const billingListDiv = document.getElementById("billingList");
+
+  if (searchBtn) {
+    searchBtn.addEventListener("click", () => {
+      const doVal = doInput.value.trim();
+      if (!doVal) return;
+      
+      // Search in static dataTracking first
+      let data = (typeof dataTracking !== 'undefined') ? dataTracking[doVal] : null;
+
+      // If not found, search in dynamic historyStore
+      if (!data) {
+        const histItem = historyStore.find(h => h.do === doVal);
+        if (histItem) {
+          const isSelesai = histItem.status === 'Selesai';
+          const steps = [
+            { waktu: histItem.tanggal + " 08:00", keterangan: "Pesanan Diterima & Diverifikasi" },
+            { waktu: histItem.tanggal + " 10:30", keterangan: "Dokumen Billing Dicetak (" + histItem.bill + ")" },
+            { waktu: histItem.tanggal + " 14:00", keterangan: "Bahan Ajar Sedang Dikemas di Gudang" }
+          ];
+
+          if (isSelesai) {
+            steps.push({ waktu: histItem.tanggal + " 17:00", keterangan: "Paket Telah Diterima oleh Customer (Selesai)" });
+          }
+
+          data = {
+            nomorDO: histItem.do,
+            nama: histItem.pengguna,
+            status: histItem.status,
+            ekspedisi: "SITTA Logistics",
+            tanggalKirim: histItem.tanggal,
+            total: "Rp " + (histItem.jumlah * 150000).toLocaleString(),
+            perjalanan: steps
+          };
+        }
+      }
+
+      if (!data) {
+        resultDiv.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--danger); background: var(--surface); border-radius: 16px; border: 1px solid var(--border);"><i class="fas fa-exclamation-triangle" style="font-size: 32px; margin-bottom: 15px;"></i><p>Nomor DO tidak ditemukan!</p></div>`;
+        return;
+      }
+
+      let timelineHtml = "";
+      data.perjalanan.forEach((p, idx) => {
+        const isActive = idx === data.perjalanan.length - 1 ? "active" : "";
+        timelineHtml += `
+          <div class="timeline-item ${isActive}" style="display: flex; gap: 20px; margin-bottom: 20px; position: relative;">
+            <div style="width: 12px; height: 12px; border-radius: 50%; background: ${isActive ? 'var(--primary)' : 'var(--border)'}; margin-top: 5px; position: relative; z-index: 2; box-shadow: ${isActive ? '0 0 10px var(--primary)' : 'none'};"></div>
+            <div style="flex: 1;">
+              <div style="font-size: 12px; color: var(--text-muted);">${p.waktu}</div>
+              <div style="color: var(--text-main); font-weight: 600;">${p.keterangan}</div>
+            </div>
           </div>
-          <div style="text-align: right;">
-            <p style="margin: 0 0 5px 0; color: var(--text-muted); font-size: 0.9em;">Total Pembayaran</p>
-            <h3 style="margin: 0; color: var(--secondary);">${h.total}</h3>
+        `;
+      });
+
+      resultDiv.innerHTML = `
+        <div class="card" style="animation: slideUp 0.4s ease; background: var(--surface); border: 1px solid var(--border); padding: 25px; border-radius: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
+            <div>
+              <h4 style="color: var(--secondary); margin-bottom: 5px; font-size: 12px;">NO. DO: ${data.nomorDO}</h4>
+              <h2 style="margin: 0; font-size: 22px;">${data.nama}</h2>
+            </div>
+            <span class="badge badge-info" style="font-size: 12px; padding: 6px 12px;">${data.status}</span>
           </div>
-          <div style="width: 100%; border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 5px;">
-            <a href="tracking.html" style="color: var(--primary); text-decoration: none; font-size: 0.9em; font-weight: bold;">Lacak Pengiriman &rarr;</a>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px; background: rgba(255,255,255,0.03); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
+            <div><span style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;">Ekspedisi</span><strong>${data.ekspedisi}</strong></div>
+            <div><span style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;">Tanggal</span><strong>${data.tanggalKirim}</strong></div>
+            <div><span style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;">Total</span><strong>${data.total}</strong></div>
+          </div>
+          <h3 style="font-size: 16px; margin-bottom: 25px;"><i class="fas fa-route" style="margin-right: 10px; color: var(--primary);"></i> Riwayat Perjalanan</h3>
+          <div style="padding-left: 5px; position: relative;">
+            <div style="position: absolute; left: 5px; top: 10px; bottom: 20px; width: 2px; background: var(--border); z-index: 1;"></div>
+            ${timelineHtml}
           </div>
         </div>
       `;
     });
-    historiGrid.innerHTML = html;
+  }
+
+  if (billingListDiv) {
+    let billingHtml = "";
+    historyStore.slice(0, 10).forEach(h => {
+      billingHtml += `
+        <div style="padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; background: rgba(255,255,255,0.02);" 
+             onclick="document.getElementById('doNumber').value='${h.do}'; document.getElementById('searchDO').click();"
+             onmouseover="this.style.borderColor='var(--primary)'; this.style.background='rgba(59, 130, 246, 0.05)'"
+             onmouseout="this.style.borderColor='var(--border)'; this.style.background='rgba(255,255,255,0.02)'">
+          <div style="display: flex; justify-content: space-between; align-items: start;">
+            <div>
+              <div style="font-weight: 700; color: var(--secondary); font-size: 14px;">${h.do}</div>
+              <div style="font-size: 12px; color: var(--text-main); margin: 3px 0;">${h.pengguna}</div>
+            </div>
+            <span class="badge ${h.status === 'Selesai' ? 'badge-success' : 'badge-warning'}" style="font-size: 9px; padding: 2px 6px;">${h.status}</span>
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 5px; display: flex; justify-content: space-between;">
+             <span>${h.tanggal}</span>
+             <span style="color: var(--primary); font-weight: 600;">${h.bill}</span>
+          </div>
+        </div>
+      `;
+    });
+    billingListDiv.innerHTML = billingHtml;
   }
 }
 
-  // Tambah stok baru
-  const addForm = document.getElementById("addForm");
-  if(addForm) {
-    addForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const lokasiVal = document.getElementById("lokasi");
-      const kodeVal = document.getElementById("kode");
-      const namaVal = document.getElementById("nama");
-      const jenisVal = document.getElementById("jenis");
-      const edisiVal = document.getElementById("edisi");
-      const stokVal = document.getElementById("stok");
-      const coverVal = document.getElementById("cover");
-
-      if (lokasiVal && kodeVal && namaVal && jenisVal && edisiVal && stokVal) {
-        const newItem = {
-          kodeLokasi: lokasiVal.value,
-          kodeBarang: kodeVal.value,
-          namaBarang: namaVal.value,
-          jenisBarang: jenisVal.value,
-          edisi: edisiVal.value,
-          stok: parseInt(stokVal.value),
-          cover: coverVal && coverVal.value ? coverVal.value : "img/placeholder.jpg"
-        };
-        dataBahanAjar.push(newItem);
-        renderGrid(searchInput ? searchInput.value : "");
-        e.target.reset();
-        showToast("Catatan stok baru berhasil ditambahkan.", "success");
-      }
-    });
-  }
+// --- UTILS ---
+function exportToCSV(data, filename) {
+  if (!data || !data.length) return;
+  const headers = Object.keys(data[0]).join(",");
+  const rows = data.map(obj => {
+    return Object.values(obj).map(v => `"${v}"`).join(",");
+  }).join("\n");
+  const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + rows;
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
