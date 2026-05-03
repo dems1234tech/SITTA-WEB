@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard SITTA</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <nav class="navbar">
+      <div class="nav-brand">
+        <img
+          src="https://1.bp.blogspot.com/-1clLdnqn9Ac/UMvqQKhf_rI/AAAAAAAAA4M/g4ABaiqOYeM/s1600/Logo+UT-Universitas-Terbuka.png"
+          alt="Logo UT"
+        />
+        <span>SITTA UT</span>
+      </div>
+      <ul>
+        <li><a href="dashboard.html">Dashboard</a></li>
+        <li><a href="stok.html">Informasi Bahan Ajar</a></li>
+        <li><a href="tracking.html">Tracking Pengiriman</a></li>
+        <li class="dropdown">
+          <a href="#">Laporan ▾</a>
+          <ul class="dropdown-content">
+            <li><a href="tracking.html">Monitoring Progress DO</a></li>
+            <li><a href="stok.html">Rekap Bahan Ajar</a></li>
+          </ul>
+        </li>
+        <li>
+          <a href="index.html" style="color: var(--accent-color)">Logout</a>
+        </li>
+      </ul>
+    </nav>
+
+    <section class="content">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 20px;
+        "
+      >
+        <h2>Dashboard Aplikasi SITTA</h2>
+        <div
+          id="realtimeClock"
+          style="
+            font-family: monospace;
+            font-size: 1.2em;
+            color: var(--secondary);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+          "
+        ></div>
+      </div>
+      <p id="greeting"></p>
+
+      <div id="historiContainer" style="margin-top: 40px">
+        <h3
+          style="
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+          "
+        >
+          Histori & Rekap Transaksi Anda
+        </h3>
+        <div
+          id="historiGrid"
+          style="display: flex; flex-direction: column; gap: 15px"
+        >
+          <!-- History rendered here -->
+        </div>
+      </div>
+    </section>
+
+    <script src="js/script.js"></script>
+  </body>
+</html>
