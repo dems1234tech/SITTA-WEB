@@ -16,8 +16,23 @@ if (!isLoginPage) {
 
 // --- GLOBAL DATA & STATE ---
 let cart = JSON.parse(localStorage.getItem("sitta_cart")) || [];
-let historyStore = JSON.parse(localStorage.getItem("sitta_history")) || (typeof dataHistory !== 'undefined' ? dataHistory : []);
-let stockStore = JSON.parse(localStorage.getItem("sitta_stock")) || (typeof dataBahanAjar !== 'undefined' ? dataBahanAjar : []);
+
+// Seed localStorage ONLY on first visit (never overwrite existing data)
+if (!localStorage.getItem("sitta_history_initialized")) {
+  if (typeof dataHistory !== 'undefined') {
+    localStorage.setItem("sitta_history", JSON.stringify(dataHistory));
+  }
+  localStorage.setItem("sitta_history_initialized", "true");
+}
+if (!localStorage.getItem("sitta_stock_initialized")) {
+  if (typeof dataBahanAjar !== 'undefined') {
+    localStorage.setItem("sitta_stock", JSON.stringify(dataBahanAjar));
+  }
+  localStorage.setItem("sitta_stock_initialized", "true");
+}
+
+let historyStore = JSON.parse(localStorage.getItem("sitta_history")) || [];
+let stockStore = JSON.parse(localStorage.getItem("sitta_stock")) || [];
 let currentStockView = 'grid';
 
 // --- GLOBAL DOM CONTENT LOADED ---
@@ -296,12 +311,19 @@ function renderStockGrid() {
         const coverUrl = b.cover || 'img/placeholder.jpg';
 
         html += `
-          <div class="stock-card" style="animation: fadeIn 0.3s ease forwards;">
+          <div class="stock-card" style="animation: fadeIn 0.3s ease forwards; position: relative;">
             <div style="height: 180px; overflow: hidden; background: #000; position: relative;">
               <img src="${coverUrl}" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.7;" onerror="this.src='https://via.placeholder.com/200x300?text=No+Cover'">
               <div style="position: absolute; bottom: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between;">
                  <span class="badge ${statusClass}" style="font-size: 10px;">${b.jenisBarang}</span>
               </div>
+              <!-- Tombol Hapus -->  
+              <button onclick="openDeleteConfirm('${b.kodeBarang}')" title="Hapus Bahan Ajar"
+                style="position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(239,68,68,0.85); color: white; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; backdrop-filter: blur(4px);"
+                onmouseover="this.style.transform='scale(1.15)'; this.style.background='rgba(239,68,68,1)'"
+                onmouseout="this.style.transform='scale(1)'; this.style.background='rgba(239,68,68,0.85)'">
+                <i class="fas fa-trash"></i>
+              </button>
             </div>
             <div style="padding: 15px;">
               <h4 style="color: var(--secondary); font-size: 11px; margin-bottom: 5px;">${b.kodeBarang}</h4>
@@ -351,7 +373,10 @@ function renderStockGrid() {
             <td>${b.edisi}</td>
             <td><strong>${b.stok}</strong></td>
             <td><span class="badge ${statusClass}">${percent < 20 ? 'Limit' : 'Aman'}</span></td>
-            <td><button onclick="addToCart('${b.kodeBarang}')" class="btn btn-small" style="padding: 8px;"><i class="fas fa-cart-plus"></i></button></td>
+            <td style="display:flex; gap:6px;">
+              <button onclick="addToCart('${b.kodeBarang}')" class="btn btn-small" style="padding: 8px;" title="Tambah ke keranjang"><i class="fas fa-cart-plus"></i></button>
+              <button onclick="openDeleteConfirm('${b.kodeBarang}')" class="btn btn-small" style="padding: 8px; background: var(--danger);" title="Hapus"><i class="fas fa-trash"></i></button>
+            </td>
           </tr>
         `;
       });
@@ -376,10 +401,77 @@ function renderStockGrid() {
     typeFilter.addEventListener("change", filterAndRender);
   }
 
+  // Tombol Tambah Stok → buka modal
+  const addStokBtn = document.getElementById("addStokBtn");
+  const addModal = document.getElementById("addModal");
+  if (addStokBtn && addModal) {
+    addStokBtn.addEventListener("click", () => {
+      // Reset cover preview setiap buka modal
+      const prev = document.getElementById("coverPreview");
+      const fname = document.getElementById("coverFileName");
+      const urlIn = document.getElementById("coverUrl");
+      const fileIn = document.getElementById("coverFile");
+      if (prev) prev.src = "https://via.placeholder.com/90x120/1e293b/64748b?text=No+Cover";
+      if (fname) fname.textContent = "Belum ada file dipilih";
+      if (urlIn) urlIn.value = "";
+      if (fileIn) fileIn.value = "";
+      window._coverBase64 = null;
+      addModal.style.display = "flex";
+      setTimeout(() => addModal.classList.add("show"), 10);
+    });
+  }
+
+  // Cover: upload file → konversi base64
+  const coverFileInput = document.getElementById("coverFile");
+  if (coverFileInput) {
+    coverFileInput.addEventListener("change", () => {
+      const file = coverFileInput.files[0];
+      if (!file) return;
+      const fname = document.getElementById("coverFileName");
+      if (fname) fname.textContent = file.name;
+      // Bersihkan URL input
+      const urlIn = document.getElementById("coverUrl");
+      if (urlIn) urlIn.value = "";
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        window._coverBase64 = ev.target.result;
+        const prev = document.getElementById("coverPreview");
+        if (prev) prev.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Cover: URL input → live preview
+  const coverUrlInput = document.getElementById("coverUrl");
+  if (coverUrlInput) {
+    coverUrlInput.addEventListener("input", () => {
+      const val = coverUrlInput.value.trim();
+      if (!val) return;
+      // Bersihkan file pilihan
+      window._coverBase64 = null;
+      const fname = document.getElementById("coverFileName");
+      if (fname) fname.textContent = "Belum ada file dipilih";
+      const fileIn = document.getElementById("coverFile");
+      if (fileIn) fileIn.value = "";
+      // Preview
+      const prev = document.getElementById("coverPreview");
+      if (prev) {
+        prev.onerror = () => { prev.src = "https://via.placeholder.com/90x120/1e293b/64748b?text=Error"; };
+        prev.src = val;
+      }
+    });
+  }
+
   const addForm = document.getElementById("addForm");
   if (addForm) {
     addForm.addEventListener("submit", (e) => {
       e.preventDefault();
+      // Tentukan cover: prioritaskan file upload (base64), lalu URL
+      const urlVal = (document.getElementById("coverUrl")?.value || "").trim();
+      const cover = window._coverBase64 || urlVal || "img/placeholder.jpg";
+
       const newItem = {
         kodeLokasi: document.getElementById("lokasi").value,
         kodeBarang: document.getElementById("kode").value,
@@ -388,14 +480,61 @@ function renderStockGrid() {
         edisi: document.getElementById("edisi").value,
         stok: parseInt(document.getElementById("stok").value),
         limit: 1000,
-        cover: "img/placeholder.jpg"
+        cover: cover
       };
       stockStore.unshift(newItem);
       localStorage.setItem("sitta_stock", JSON.stringify(stockStore));
       filterAndRender();
       addForm.reset();
-      const closeBtn = document.querySelector(".modal .close");
-      if (closeBtn) closeBtn.click();
+      window._coverBase64 = null;
+      // Tutup addModal secara spesifik
+      if (addModal) {
+        addModal.classList.remove("show");
+        setTimeout(() => addModal.style.display = "none", 300);
+      }
+      showToast("Bahan ajar baru berhasil ditambahkan!");
+    });
+  }
+
+  // --- HAPUS BUKU ---
+  const deleteModal = document.getElementById("deleteModal");
+  const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
+  const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
+  let _deleteTargetKode = null;
+
+  window.openDeleteConfirm = (kode) => {
+    _deleteTargetKode = kode;
+    const item = stockStore.find(b => b.kodeBarang === kode);
+    const msgEl = document.getElementById("deleteModalMsg");
+    if (item && msgEl) msgEl.textContent = `"${item.namaBarang}" (${kode}) akan dihapus dari sistem secara permanen.`;
+    if (deleteModal) {
+      deleteModal.style.display = "flex";
+      setTimeout(() => deleteModal.classList.add("show"), 10);
+    }
+  };
+
+  if (confirmDeleteBtn) {
+    confirmDeleteBtn.addEventListener("click", () => {
+      if (!_deleteTargetKode) return;
+      stockStore = stockStore.filter(b => b.kodeBarang !== _deleteTargetKode);
+      localStorage.setItem("sitta_stock", JSON.stringify(stockStore));
+      filterAndRender();
+      if (deleteModal) {
+        deleteModal.classList.remove("show");
+        setTimeout(() => deleteModal.style.display = "none", 300);
+      }
+      showToast("Bahan ajar berhasil dihapus.");
+      _deleteTargetKode = null;
+    });
+  }
+
+  if (cancelDeleteBtn) {
+    cancelDeleteBtn.addEventListener("click", () => {
+      if (deleteModal) {
+        deleteModal.classList.remove("show");
+        setTimeout(() => deleteModal.style.display = "none", 300);
+      }
+      _deleteTargetKode = null;
     });
   }
 

@@ -53,28 +53,28 @@
         <div class="stat-card">
           <div class="stat-icon" style="background: rgba(59, 130, 246, 0.2);"><i class="fas fa-clipboard-list" style="color: #3b82f6;"></i></div>
           <div class="stat-info">
-            <h3 id="totalTrxCount">5</h3>
+            <h3 id="totalTrxCount">-</h3>
             <p>Total Transaksi</p>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon" style="background: rgba(16, 185, 129, 0.2);"><i class="fas fa-check-circle" style="color: #10b981;"></i></div>
           <div class="stat-info">
-            <h3 id="successTrxCount">3</h3>
+            <h3 id="successTrxCount">-</h3>
             <p>Transaksi Selesai</p>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon" style="background: rgba(234, 179, 8, 0.2);"><i class="fas fa-sync-alt" style="color: #eab308;"></i></div>
           <div class="stat-info">
-            <h3 id="processTrxCount">2</h3>
+            <h3 id="processTrxCount">-</h3>
             <p>Dalam Proses</p>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon" style="background: rgba(13, 148, 136, 0.2);"><i class="fas fa-book" style="color: #0d9488;"></i></div>
           <div class="stat-info">
-            <h3 id="totalBooksCount">155</h3>
+            <h3 id="totalBooksCount">-</h3>
             <p>Total Eksemplar</p>
           </div>
         </div>
@@ -130,11 +130,16 @@
     <script src="js/data.js"></script>
     <script src="js/script.js"></script>
     <script>
-      // Page specific logic for History
+      // Update stats dinamis dari historyStore
       document.addEventListener('DOMContentLoaded', () => {
-        if (typeof renderHistoryTable === 'function') {
-          renderHistoryTable();
-        }
+        const totalEl = document.getElementById('totalTrxCount');
+        const successEl = document.getElementById('successTrxCount');
+        const processEl = document.getElementById('processTrxCount');
+        const booksEl = document.getElementById('totalBooksCount');
+        if (totalEl) totalEl.innerText = historyStore.length;
+        if (successEl) successEl.innerText = historyStore.filter(h => h.status === 'Selesai').length;
+        if (processEl) processEl.innerText = historyStore.filter(h => h.status === 'Proses').length;
+        if (booksEl) booksEl.innerText = historyStore.reduce((acc, h) => acc + (h.jumlah || 0), 0);
       });
     </script>
   </body>
