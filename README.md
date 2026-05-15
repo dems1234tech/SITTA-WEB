@@ -1,7 +1,7 @@
 # SITTA - Sistem Informasi Transaksi & Tracking Bahan Ajar (Universitas Terbuka)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/dems1234tech/SITTA-WEB/main/assets/banner.png" alt="SITTA Banner" width="100%">
+  <img src="assets/banner.png" alt="SITTA Banner" width="100%">
 </p>
 
 <h1 align="center">🚀 SITTA (Vanilla JS Edition)</h1>
@@ -109,4 +109,6 @@ Pemrograman_berbasis_web/
   <i>"Menuju Digitalisasi Pendidikan Tinggi Terbuka dan Jarak Jauh."</i><br>
   <strong>© 2026 Universitas Terbuka - Developed by [dems123tech](https://github.com/dems123tech)</strong>
 </p>
+
+
 
